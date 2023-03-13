@@ -5,31 +5,31 @@
 typedef struct {
     PyObject_HEAD
     short vertices;
-    short* edges;
+    short *edges;
 } Graph;
 
-static void Graph_dealloc(Graph* self) {
+static void Graph_dealloc(Graph *self) {
     free(self->edges);
-    Py_TYPE(self)->tp_free((PyObject *)self);
+    Py_TYPE(self)->tp_free((PyObject *) self);
 }
 
-static PyObject* Graph_new(PyTypeObject* type, PyObject* args, PyObject *kwds) {
-    Graph* self;
-    self = (Graph*)type->tp_alloc(type, 0);
-    if(self!=NULL){
+static PyObject *Graph_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
+    Graph *self;
+    self = (Graph *) type->tp_alloc(type, 0);
+    if (self != NULL) {
         self->vertices = 0x0000;
         self->edges = NULL;
     }
-    return (PyObject*) self;
+    return (PyObject *) self;
 }
 
-static int Graph_init(Graph* self, PyObject* args, PyObject *kwds) {
+static int Graph_init(Graph *self, PyObject *args, PyObject *kwds) {
     char *txt = "?";
-    if(args != NULL) {
+    if (args != NULL) {
         PyArg_ParseTuple(args, "s", &txt);
     }
 
-    self->edges = malloc(16 * sizeof (short));
+    self->edges = malloc(16 * sizeof(short));
     for (int i = 0; i < 16; i++) {
         self->edges[i] = 0x0000;
     }
@@ -63,10 +63,9 @@ static int Graph_init(Graph* self, PyObject* args, PyObject *kwds) {
     return 0;
 }
 
-static PyObject* number_of_vertices(Graph* self) {
+static PyObject *number_of_vertices(Graph *self) {
     short ctr = 0;
     short vertices = self->vertices;
-    printf("vertices: %d\n", self->vertices);
     for (int i = 0; i < 16; i++) {
         if ((vertices & 0x0001) == 1) {
             ctr++;
@@ -77,15 +76,31 @@ static PyObject* number_of_vertices(Graph* self) {
     return PyLong_FromLong(ret);
 }
 
+static PyObject* number_of_edges(Graph *self) {
+    short ctr = 0;
+    for (int j = 0; j < 16; j++) {
+        short edges = self->edges[j];
+        for (int i = 0; i < 16; i++) {
+            if ((edges & 0x0001) == 1) {
+                ctr++;
+            }
+            edges = edges >> 1;
+        }
+    }
+    long ret = ctr/2;
+    return PyLong_FromLong(ret);
+}
+
 static PyMemberDef Graph_members[] = {
         {"vertices", T_SHORT, offsetof(Graph, vertices), 0, PyDoc_STR("vertices of the graph")},
-        {"edges", T_SHORT, offsetof(Graph, edges), 0, PyDoc_STR("edges of the graph")},
+        {"edges",    T_SHORT, offsetof(Graph, edges),    0, PyDoc_STR("edges of the graph")},
         {NULL}  /* Sentinel */
 };
 
 static PyMethodDef Graph_methods[] = {
-        {"number_of_vertices", (PyCFunction)number_of_vertices, METH_NOARGS | METH_CLASS},
-        {NULL, NULL}
+        {"number_of_vertices", (PyCFunction) number_of_vertices, METH_NOARGS},
+        {"number_of_edges", (PyCFunction) number_of_edges, METH_NOARGS},
+        {NULL,                 NULL}
 };
 
 static PyTypeObject GraphType = {
@@ -146,7 +161,7 @@ PyMODINIT_FUNC PyInit_simple_graphs(void) {
         return NULL;
 
     Py_INCREF(&GraphType);
-    if (PyModule_AddObject(m, "Graph", (PyObject *)&GraphType) < 0) {
+    if (PyModule_AddObject(m, "Graph", (PyObject * ) & GraphType) < 0) {
         Py_DECREF(&GraphType);
         Py_DECREF(m);
         return NULL;
