@@ -63,6 +63,23 @@ static int Graph_init(Graph *self, PyObject *args, PyObject *kwds) {
     return 0;
 }
 
+static PyObject *vertices(Graph *self) {
+    PyObject *vertices_set = PySet_New(NULL);
+    if (!vertices_set) {
+        return NULL;
+    }
+
+    for (int i = 0; i < 16; i++) {
+        if (((self->vertices >> i) & 0x0001) == 1) {
+            PyObject *item = PyLong_FromLong(i);
+            PySet_Add(vertices_set, item);
+            Py_DECREF(item);
+        }
+    }
+
+    return vertices_set;
+}
+
 static PyObject *number_of_vertices(Graph *self) {
     short ctr = 0;
     short vertices = self->vertices;
@@ -76,7 +93,54 @@ static PyObject *number_of_vertices(Graph *self) {
     return PyLong_FromLong(ret);
 }
 
-static PyObject* number_of_edges(Graph *self) {
+static PyObject *vertex_degree(Graph *self, PyObject* args) {
+    int v;
+
+    if (args != NULL) {
+        PyArg_ParseTuple(args, "i", &v);
+    }
+
+    short ctr = 0;
+    short edges = self->edges[v];
+    for (int i = 0; i < 16; i++) {
+        if ((edges & 0x0001) == 1) {
+            ctr++;
+        }
+        edges = edges >> 1;
+    }
+
+    long ret = (long) ctr;
+    return PyLong_FromLong(ret);
+}
+
+// vertex neighbours
+// add vertex
+// delete vertex
+
+static PyObject* edges(Graph *self) {
+    PyObject *edges_set = PySet_New(NULL);
+    if (!edges_set) {
+        return NULL;
+    }
+
+    for (int j = 0; j < 16; j++) {
+        short edges = self->edges[j];
+        for (int i = 0; i < 16; i++) {
+            if ((edges & 0x0001) == 1) {
+                PyObject* edge = PyTuple_New(2);
+                PyTuple_SetItem(edge, 0, PyLong_FromLong(min(i, j)));
+                PyTuple_SetItem(edge, 1, PyLong_FromLong(max(i, j)));
+                PySet_Add(edges_set, edge);
+                Py_DECREF(edge);
+            }
+            edges = edges >> 1;
+        }
+    }
+
+    return edges_set;
+}
+
+static PyObject *number_of_edges(Graph *self) {
     short ctr = 0;
     for (int j = 0; j < 16; j++) {
         short edges = self->edges[j];
@@ -87,7 +151,7 @@ static PyObject* number_of_edges(Graph *self) {
             edges = edges >> 1;
         }
     }
-    long ret = ctr/2;
+    long ret = ctr / 2;
     return PyLong_FromLong(ret);
 }
 
@@ -99,7 +163,10 @@ static PyMemberDef Graph_members[] = {
 
 static PyMethodDef Graph_methods[] = {
         {"number_of_vertices", (PyCFunction) number_of_vertices, METH_NOARGS},
-        {"number_of_edges", (PyCFunction) number_of_edges, METH_NOARGS},
+        {"vertices",    (PyCFunction) vertices,    METH_NOARGS},
+        {"vertex_degree",    (PyCFunction) vertex_degree,    METH_VARARGS},
+        {"number_of_edges",    (PyCFunction) number_of_edges,    METH_NOARGS},
+        {"edges",    (PyCFunction) edges,    METH_NOARGS},
         {NULL,                 NULL}
 };
 
