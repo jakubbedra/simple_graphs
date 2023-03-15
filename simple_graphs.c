@@ -113,9 +113,57 @@ static PyObject *vertex_degree(Graph *self, PyObject* args) {
     return PyLong_FromLong(ret);
 }
 
-// vertex neighbours
-// add vertex
-// delete vertex
+static PyObject* vertex_neighbours(Graph* self, PyObject* args) {
+    int v;
+
+    if (args != NULL) {
+        PyArg_ParseTuple(args, "i", &v);
+    }
+    PyObject *neighbours_set = PySet_New(NULL);
+
+    short edges = self->edges[v];
+    for (int i = 0; i < 16; i++) {
+        if ((edges & 0x0001) == 1) {
+            PyObject *item = PyLong_FromLong(i);
+            PySet_Add(neighbours_set, item);
+            Py_DECREF(item);
+        }
+        edges = edges >> 1;
+    }
+
+    return neighbours_set;
+}
+
+static PyObject* add_vertex(Graph* self, PyObject* args) {
+    int v;
+
+    if (args != NULL) {
+        PyArg_ParseTuple(args, "i", &v);
+    }
+
+    short tmp = (0x0001 << v);
+    self->vertices = self->vertices | tmp;
+    return Py_None;
+}
+
+static PyObject* delete_vertex(Graph* self, PyObject* args) {
+    int v;
+
+    if (args != NULL) {
+        PyArg_ParseTuple(args, "i", &v);
+    }
+
+    self->edges[v] = 0x0000;
+
+    short tmp = 0x0001 << v;
+    tmp = ~tmp;
+
+    for (int i=0; i<16; i++) {
+        self->edges[i] = self->edges[i] & tmp;
+    }
+    self->vertices = self->vertices & tmp;
+    return Py_None;
+}
 
 static PyObject* edges(Graph *self) {
     PyObject *edges_set = PySet_New(NULL);
@@ -155,17 +203,64 @@ static PyObject *number_of_edges(Graph *self) {
     return PyLong_FromLong(ret);
 }
 
+static PyObject* is_edge(Graph* self, PyObject* args) {
+    int v, u;
+
+    if (args != NULL) {
+        PyArg_ParseTuple(args, "ii", &v, &u);
+    }
+
+    short edges_v = self->edges[v];
+    edges_v >> u;
+    edges_v = edges_v & 0x0001;
+
+    return PyBool_FromLong(edges);
+}
+
+static PyObject* add_edge(Graph* self, PyObject* args) {
+    int v, u;
+
+    if (args != NULL) {
+        PyArg_ParseTuple(args, "ii", &v, &u);
+    }
+
+    short update_u = (0x0001 << v);
+    short update_v = (0x0001 << u);
+    self->edges[v] = self->edges[v] | update_v;
+    self->edges[u] = self->edges[u] | update_u;
+    return Py_None;
+}
+
+static PyObject* delete_edge(Graph* self, PyObject* args) {
+    int v, u;
+
+    if (args != NULL) {
+        PyArg_ParseTuple(args, "ii", &v, &u);
+    }
+
+    short update_u = ~(0x0001 << v);
+    short update_v = ~(0x0001 << u);
+    self->edges[v] = self->edges[v] & update_v;
+    self->edges[u] = self->edges[u] & update_u;
+    return Py_None;
+}
+
 static PyMemberDef Graph_members[] = {
         {"vertices", T_SHORT, offsetof(Graph, vertices), 0, PyDoc_STR("vertices of the graph")},
         {"edges",    T_SHORT, offsetof(Graph, edges),    0, PyDoc_STR("edges of the graph")},
-        {NULL}  /* Sentinel */
+        {NULL}
 };
 
 static PyMethodDef Graph_methods[] = {
         {"number_of_vertices", (PyCFunction) number_of_vertices, METH_NOARGS},
         {"vertices",    (PyCFunction) vertices,    METH_NOARGS},
         {"vertex_degree",    (PyCFunction) vertex_degree,    METH_VARARGS},
+        {"vertex_neighbours",    (PyCFunction) vertex_neighbours,    METH_VARARGS},
+        {"add_vertex",    (PyCFunction) add_vertex,    METH_VARARGS},
+        {"delete_vertex",    (PyCFunction) delete_vertex,    METH_VARARGS},
         {"number_of_edges",    (PyCFunction) number_of_edges,    METH_NOARGS},
+        {"add_edge",    (PyCFunction) add_edge,    METH_VARARGS},
+        {"delete_edge",    (PyCFunction) delete_edge,    METH_VARARGS},
         {"edges",    (PyCFunction) edges,    METH_NOARGS},
         {NULL,                 NULL}
 };
