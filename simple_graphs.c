@@ -1,3 +1,15 @@
+#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
+#define BYTE_TO_BINARY(byte)  \
+  (byte & 0x80 ? '1' : '0'), \
+  (byte & 0x40 ? '1' : '0'), \
+  (byte & 0x20 ? '1' : '0'), \
+  (byte & 0x10 ? '1' : '0'), \
+  (byte & 0x08 ? '1' : '0'), \
+  (byte & 0x04 ? '1' : '0'), \
+  (byte & 0x02 ? '1' : '0'), \
+  (byte & 0x01 ? '1' : '0')
+#include <stdlib.h>
+
 #include <Python.h>
 #include "structmember.h"
 #include <stdio.h>
@@ -6,16 +18,16 @@ typedef struct {
     PyObject_HEAD
     short vertices;
     short *edges;
-} Graph;
+} AdjacencyMatrix;
 
-static void Graph_dealloc(Graph *self) {
+static void AdjacencyMatrix_dealloc(AdjacencyMatrix *self) {
     free(self->edges);
     Py_TYPE(self)->tp_free((PyObject *) self);
 }
 
-static PyObject *Graph_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-    Graph *self;
-    self = (Graph *) type->tp_alloc(type, 0);
+static PyObject *AdjacencyMatrix_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
+    AdjacencyMatrix *self;
+    self = (AdjacencyMatrix *) type->tp_alloc(type, 0);
     if (self != NULL) {
         self->vertices = 0x0000;
         self->edges = NULL;
@@ -23,10 +35,12 @@ static PyObject *Graph_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
     return (PyObject *) self;
 }
 
-static int Graph_init(Graph *self, PyObject *args, PyObject *kwds) {
+static int AdjacencyMatrix_init(AdjacencyMatrix *self, PyObject *args, PyObject *kwargs) {
+    static char *keywords[] = {"text", NULL};
     char *txt = "?";
-    if (args != NULL) {
-        PyArg_ParseTuple(args, "s", &txt);
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|s", keywords, &txt)) {
+        return -1;
     }
 
     self->edges = malloc(16 * sizeof(short));
@@ -63,7 +77,7 @@ static int Graph_init(Graph *self, PyObject *args, PyObject *kwds) {
     return 0;
 }
 
-static PyObject *vertices(Graph *self) {
+static PyObject *vertices(AdjacencyMatrix *self) {
     PyObject *vertices_set = PySet_New(NULL);
     if (!vertices_set) {
         return NULL;
@@ -80,7 +94,7 @@ static PyObject *vertices(Graph *self) {
     return vertices_set;
 }
 
-static PyObject *number_of_vertices(Graph *self) {
+static PyObject *number_of_vertices(AdjacencyMatrix *self) {
     short ctr = 0;
     short vertices = self->vertices;
     for (int i = 0; i < 16; i++) {
@@ -93,7 +107,7 @@ static PyObject *number_of_vertices(Graph *self) {
     return PyLong_FromLong(ret);
 }
 
-static PyObject *vertex_degree(Graph *self, PyObject* args) {
+static PyObject *vertex_degree(AdjacencyMatrix *self, PyObject *args) {
     int v;
 
     if (args != NULL) {
@@ -113,28 +127,28 @@ static PyObject *vertex_degree(Graph *self, PyObject* args) {
     return PyLong_FromLong(ret);
 }
 
-static PyObject* vertex_neighbours(Graph* self, PyObject* args) {
+static PyObject *vertex_neighbors(AdjacencyMatrix *self, PyObject *args) {
     int v;
 
     if (args != NULL) {
         PyArg_ParseTuple(args, "i", &v);
     }
-    PyObject *neighbours_set = PySet_New(NULL);
+    PyObject *neighbors_set = PySet_New(NULL);
 
     short edges = self->edges[v];
     for (int i = 0; i < 16; i++) {
         if ((edges & 0x0001) == 1) {
             PyObject *item = PyLong_FromLong(i);
-            PySet_Add(neighbours_set, item);
+            PySet_Add(neighbors_set, item);
             Py_DECREF(item);
         }
         edges = edges >> 1;
     }
 
-    return neighbours_set;
+    return neighbors_set;
 }
 
-static PyObject* add_vertex(Graph* self, PyObject* args) {
+static PyObject *add_vertex(AdjacencyMatrix *self, PyObject *args) {
     int v;
 
     if (args != NULL) {
@@ -143,10 +157,10 @@ static PyObject* add_vertex(Graph* self, PyObject* args) {
 
     short tmp = (0x0001 << v);
     self->vertices = self->vertices | tmp;
-    return Py_None;
+    return PyBool_FromLong(1);
 }
 
-static PyObject* delete_vertex(Graph* self, PyObject* args) {
+static PyObject *delete_vertex(AdjacencyMatrix *self, PyObject *args) {
     int v;
 
     if (args != NULL) {
@@ -158,14 +172,14 @@ static PyObject* delete_vertex(Graph* self, PyObject* args) {
     short tmp = 0x0001 << v;
     tmp = ~tmp;
 
-    for (int i=0; i<16; i++) {
+    for (int i = 0; i < 16; i++) {
         self->edges[i] = self->edges[i] & tmp;
     }
     self->vertices = self->vertices & tmp;
-    return Py_None;
+    return PyBool_FromLong(1);
 }
 
-static PyObject* edges(Graph *self) {
+static PyObject *edges(AdjacencyMatrix *self) {
     PyObject *edges_set = PySet_New(NULL);
     if (!edges_set) {
         return NULL;
@@ -175,7 +189,7 @@ static PyObject* edges(Graph *self) {
         short edges = self->edges[j];
         for (int i = 0; i < 16; i++) {
             if ((edges & 0x0001) == 1) {
-                PyObject* edge = PyTuple_New(2);
+                PyObject *edge = PyTuple_New(2);
                 PyTuple_SetItem(edge, 0, PyLong_FromLong(min(i, j)));
                 PyTuple_SetItem(edge, 1, PyLong_FromLong(max(i, j)));
                 PySet_Add(edges_set, edge);
@@ -188,7 +202,7 @@ static PyObject* edges(Graph *self) {
     return edges_set;
 }
 
-static PyObject *number_of_edges(Graph *self) {
+static PyObject *number_of_edges(AdjacencyMatrix *self) {
     short ctr = 0;
     for (int j = 0; j < 16; j++) {
         short edges = self->edges[j];
@@ -203,7 +217,7 @@ static PyObject *number_of_edges(Graph *self) {
     return PyLong_FromLong(ret);
 }
 
-static PyObject* is_edge(Graph* self, PyObject* args) {
+static PyObject *is_edge(AdjacencyMatrix *self, PyObject *args) {
     int v, u;
 
     if (args != NULL) {
@@ -211,27 +225,38 @@ static PyObject* is_edge(Graph* self, PyObject* args) {
     }
 
     short edges_v = self->edges[v];
-    edges_v >> u;
+    edges_v = edges_v >> u;
     edges_v = edges_v & 0x0001;
 
-    return PyBool_FromLong(edges);
+   // for (int j = 0; j < 16; j++) {
+   //     short m = self->edges[j];
+   //     printf("m: " BYTE_TO_BINARY_PATTERN" " BYTE_TO_BINARY_PATTERN"\n",
+   //            BYTE_TO_BINARY(m>>8), BYTE_TO_BINARY(m));
+   // }
+   // printf("%d", edges_v);
+   // printf("m: " BYTE_TO_BINARY_PATTERN" " BYTE_TO_BINARY_PATTERN"\n",
+   //        BYTE_TO_BINARY(edges_v>>8), BYTE_TO_BINARY(edges_v));
+
+    return PyBool_FromLong(edges_v);
 }
 
-static PyObject* add_edge(Graph* self, PyObject* args) {
+static PyObject* add_edge(AdjacencyMatrix *self, PyObject *args) {
     int v, u;
 
     if (args != NULL) {
         PyArg_ParseTuple(args, "ii", &v, &u);
     }
 
-    short update_u = (0x0001 << v);
-    short update_v = (0x0001 << u);
-    self->edges[v] = self->edges[v] | update_v;
-    self->edges[u] = self->edges[u] | update_u;
-    return Py_None;
+    if (v != u) {
+        short update_u = (0x0001 << v);
+        short update_v = (0x0001 << u);
+        self->edges[v] = self->edges[v] | update_v;
+        self->edges[u] = self->edges[u] | update_u;
+    }
+    return PyBool_FromLong(1);
 }
 
-static PyObject* delete_edge(Graph* self, PyObject* args) {
+static PyObject *delete_edge(AdjacencyMatrix *self, PyObject *args) {
     int v, u;
 
     if (args != NULL) {
@@ -242,35 +267,36 @@ static PyObject* delete_edge(Graph* self, PyObject* args) {
     short update_v = ~(0x0001 << u);
     self->edges[v] = self->edges[v] & update_v;
     self->edges[u] = self->edges[u] & update_u;
-    return Py_None;
+    return PyBool_FromLong(1);
 }
 
-static PyMemberDef Graph_members[] = {
-        {"vertices", T_SHORT, offsetof(Graph, vertices), 0, PyDoc_STR("vertices of the graph")},
-        {"edges",    T_SHORT, offsetof(Graph, edges),    0, PyDoc_STR("edges of the graph")},
+static PyMemberDef AdjacencyMatrix_members[] = {
+        {"vertices", T_SHORT, offsetof(AdjacencyMatrix, vertices), 0, PyDoc_STR("vertices of the graph")},
+        {"edges",    T_SHORT, offsetof(AdjacencyMatrix, edges),    0, PyDoc_STR("edges of the graph")},
         {NULL}
 };
 
-static PyMethodDef Graph_methods[] = {
+static PyMethodDef AdjacencyMatrix_methods[] = {
         {"number_of_vertices", (PyCFunction) number_of_vertices, METH_NOARGS},
-        {"vertices",    (PyCFunction) vertices,    METH_NOARGS},
-        {"vertex_degree",    (PyCFunction) vertex_degree,    METH_VARARGS},
-        {"vertex_neighbours",    (PyCFunction) vertex_neighbours,    METH_VARARGS},
-        {"add_vertex",    (PyCFunction) add_vertex,    METH_VARARGS},
-        {"delete_vertex",    (PyCFunction) delete_vertex,    METH_VARARGS},
+        {"vertices",           (PyCFunction) vertices,           METH_NOARGS},
+        {"vertex_degree",      (PyCFunction) vertex_degree,      METH_VARARGS},
+        {"vertex_neighbors",   (PyCFunction) vertex_neighbors,   METH_VARARGS},
+        {"add_vertex",         (PyCFunction) add_vertex,         METH_VARARGS},
+        {"delete_vertex",      (PyCFunction) delete_vertex,      METH_VARARGS},
         {"number_of_edges",    (PyCFunction) number_of_edges,    METH_NOARGS},
-        {"add_edge",    (PyCFunction) add_edge,    METH_VARARGS},
-        {"delete_edge",    (PyCFunction) delete_edge,    METH_VARARGS},
-        {"edges",    (PyCFunction) edges,    METH_NOARGS},
+        {"is_edge",            (PyCFunction) is_edge,            METH_VARARGS},
+        {"add_edge",           (PyCFunction) add_edge,           METH_VARARGS},
+        {"delete_edge",        (PyCFunction) delete_edge,        METH_VARARGS},
+        {"edges",              (PyCFunction) edges,              METH_NOARGS},
         {NULL,                 NULL}
 };
 
-static PyTypeObject GraphType = {
+static PyTypeObject AdjacencyMatrixType = {
         PyVarObject_HEAD_INIT(NULL, 0)
-        "_simple_graphs.Graph",
-        sizeof(Graph),
+        "_simple_graphs.AdjacencyMatrix",
+        sizeof(AdjacencyMatrix),
         0,
-        (destructor)Graph_dealloc,                  /* tp_dealloc */
+        (destructor)AdjacencyMatrix_dealloc,                  /* tp_dealloc */
         0,                                          /* tp_vectorcall_offset */
         0,                                          /* tp_getattr */
         0,                                          /* tp_setattr */
@@ -293,17 +319,17 @@ static PyTypeObject GraphType = {
         0,                                          /* tp_weaklistoffset */
         0,                                          /* tp_iter */
         0,                                          /* tp_iternext */
-        Graph_methods,                              /* tp_methods */
-        Graph_members,                              /* tp_members */
+        AdjacencyMatrix_methods,                              /* tp_methods */
+        AdjacencyMatrix_members,                              /* tp_members */
         0,                                          /* tp_getset */
         0,                                          /* tp_base */
         0,                                          /* tp_dict */
         0,                                          /* tp_descr_get */
         0,                                          /* tp_descr_set */
         0,                                          /* tp_dictoffset */
-        (initproc)Graph_init,                       /* tp_init */
+        (initproc)AdjacencyMatrix_init,                       /* tp_init */
         0,                                          /* tp_alloc */
-        Graph_new,                                  /* tp_new */
+        AdjacencyMatrix_new,                                  /* tp_new */
 };
 
 static struct PyModuleDef graphmodule = {
@@ -315,16 +341,16 @@ static struct PyModuleDef graphmodule = {
 
 PyMODINIT_FUNC PyInit_simple_graphs(void) {
     PyObject *m;
-    if (PyType_Ready(&GraphType) < 0)
+    if (PyType_Ready(&AdjacencyMatrixType) < 0)
         return NULL;
 
     m = PyModule_Create(&graphmodule);
     if (m == NULL)
         return NULL;
 
-    Py_INCREF(&GraphType);
-    if (PyModule_AddObject(m, "Graph", (PyObject * ) & GraphType) < 0) {
-        Py_DECREF(&GraphType);
+    Py_INCREF(&AdjacencyMatrixType);
+    if (PyModule_AddObject(m, "AdjacencyMatrix", (PyObject * ) & AdjacencyMatrixType) < 0) {
+        Py_DECREF(&AdjacencyMatrixType);
         Py_DECREF(m);
         return NULL;
     }
