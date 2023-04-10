@@ -229,15 +229,6 @@ static PyObject *is_edge(AdjacencyMatrix *self, PyObject *args) {
     edges_v = edges_v >> u;
     edges_v = edges_v & 0x0001;
 
-    // for (int j = 0; j < 16; j++) {
-    //     short m = self->edges[j];
-    //     printf("m: " BYTE_TO_BINARY_PATTERN" " BYTE_TO_BINARY_PATTERN"\n",
-    //            BYTE_TO_BINARY(m>>8), BYTE_TO_BINARY(m));
-    // }
-    // printf("%d", edges_v);
-    // printf("m: " BYTE_TO_BINARY_PATTERN" " BYTE_TO_BINARY_PATTERN"\n",
-    //        BYTE_TO_BINARY(edges_v>>8), BYTE_TO_BINARY(edges_v));
-
     return PyBool_FromLong(edges_v);
 }
 
@@ -271,25 +262,20 @@ static PyObject *delete_edge(AdjacencyMatrix *self, PyObject *args) {
     return PyBool_FromLong(1);
 }
 
-/*
- *
- *
- *
- *
- * */
-
-static int color_component(AdjacencyMatrix *self, short vertex, short colors, short memset, short color) {
+static int color_component(AdjacencyMatrix *self, short vertex, short *colors, short color) {
     int n = getN(self);
-    // color is either 0x00 or 0x01
-    memset = memset | (0x01 << vertex); // vertex marked as visited
-    colors = colors | (color << vertex);
+    colors[vertex] = color;
+
     for (int v = 0; v < n; v++) {
         short mask = (0x01 << v);
         if ((mask & self->edges[vertex]) != 0) { // there is an edge
-            if(((mask & colors) == color) && ((memset & mask) == mask)) { // edge is visited and colored with the same color
+            if (colors[v] == color) {
                 return 0;
-            } else if(color_component(self, v, colors, memset, (~color) & 0x01) == 0) {
-                return 0;
+            }
+            if (colors[v] == -1) {
+                if (color_component(self, v, colors, (~color) & 0x01) == 0) {
+                    return 0;
+                }
             }
         }
     }
@@ -301,21 +287,14 @@ static PyObject *is_bipartite(AdjacencyMatrix *self) {
     if (self->vertices == 0x00) {
         return PyBool_FromLong(1);
     }
+    short colors[] =
+            {-1, -1, -1, -1, -1, -1, -1, -1,
+             -1, -1, -1, -1, -1, -1, -1, -1,};
 
-    short colors = 0x00; // colors 0 or 1 (always check if visited first)
-    short memset = 0x00; // tells if the vertex was visited
-
-/**
- *      for v in self.__vertices:
-            if cs[v] == 0:
-                if not color_component( v, 1 ):
-                    return False
-        return True
- */
     int n = getN(self);
-    for (int i=0; i<n; i++){
-        if(((memset) & (0x01 << i)) == 0x00) {
-            if (color_component(self, i, colors, memset, 0x00) == 0) {
+    for (int i = 0; i < n; i++) {
+        if (colors[i] == -1) {
+            if (color_component(self, i, colors, 0x00) == 0) {
                 return PyBool_FromLong(0);
             }
         }
@@ -324,7 +303,7 @@ static PyObject *is_bipartite(AdjacencyMatrix *self) {
     return PyBool_FromLong(1);
 }
 
-static int getN(AdjacencyMatrix* self) {
+static int getN(AdjacencyMatrix *self) {
     short n = 0;
     short vertices = self->vertices;
     for (int i = 0; i < 16; i++) {
@@ -335,20 +314,6 @@ static int getN(AdjacencyMatrix* self) {
     }
     return n;
 }
-
-/**
- * cs = {v: 0 for v in self.__vertices}
-        def color_component( vertex, color ):
-            cs[vertex] = color
-            for v in self.__vertices:
-                if self.is_edge( v, vertex ):
-                    if cs[v] == color:
-                        return False
-                    if cs[v] == 0:
-                        if not color_component( v, 3 - color ):
-                            return False
-            return True
- */
 
 static PyMemberDef AdjacencyMatrix_members[] = {
         {"vertices", T_SHORT, offsetof(AdjacencyMatrix, vertices), 0, PyDoc_STR("vertices of the graph")},
